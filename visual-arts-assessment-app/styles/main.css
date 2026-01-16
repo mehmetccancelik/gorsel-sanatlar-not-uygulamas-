@@ -706,6 +706,111 @@ body {
     font-weight: 500;
 }
 
+/* ===== Auth Screen (Firebase) ===== */
+.auth-screen {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: var(--bg);
+    padding: 1rem;
+}
+
+.auth-card {
+    background: var(--bg-card);
+    padding: 2rem 1.5rem;
+    border-radius: 1.25rem;
+    box-shadow: var(--shadow-lg);
+    text-align: center;
+    width: 100%;
+    max-width: 400px;
+    border: 1px solid var(--border);
+}
+
+.auth-icon {
+    font-size: 3.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.auth-card h1 {
+    font-size: 1.5rem;
+    color: var(--text);
+    margin-bottom: 1.5rem;
+}
+
+.auth-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.auth-tab {
+    flex: 1;
+    padding: 0.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-secondary);
+}
+
+.auth-tab.active {
+    background: var(--gradient-primary);
+    border-color: transparent;
+    color: white;
+}
+
+.auth-form {
+    text-align: left;
+}
+
+.auth-form .form-group {
+    margin-bottom: 1rem;
+}
+
+.auth-info {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.btn-full {
+    width: 100%;
+}
+
+.btn-link {
+    display: block;
+    background: none;
+    border: none;
+    color: var(--primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    margin-top: 1rem;
+    text-align: center;
+    width: 100%;
+}
+
+.btn-link:hover {
+    text-decoration: underline;
+}
+
+.auth-error {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    background: rgba(244, 63, 94, 0.1);
+    color: var(--danger);
+}
+
+.auth-error.success {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--success);
+}
+
 @keyframes shake {
 
     0%,

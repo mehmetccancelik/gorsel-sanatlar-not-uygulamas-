@@ -1,15 +1,13 @@
 // Firebase Configuration
-// IMPORTANT: Replace these values with your own Firebase project config
-// Get these from: Firebase Console > Project Settings > Your apps > Web app
+// Project: gorsel-sanatlar-app
 
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY_HERE",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyA88j_2_FUs4akPDD0p-7DobQiME0P_ue4",
+    authDomain: "gorsel-sanatlar-app.firebaseapp.com",
+    projectId: "gorsel-sanatlar-app",
+    storageBucket: "gorsel-sanatlar-app.firebasestorage.app",
+    messagingSenderId: "450683935388",
+    appId: "1:450683935388:web:e187e42247fcb086aaeb59"
 };
 
-// Initialize Firebase (will be done in database.js)
 export default firebaseConfig;

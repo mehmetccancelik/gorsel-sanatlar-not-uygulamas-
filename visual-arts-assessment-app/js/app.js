@@ -1,24 +1,28 @@
 // Main Application Entry Point
 import db from './database.js';
-import SecurityManager from './components/SecurityManager.js';
 
 class App {
     constructor() {
         this.currentRoute = 'classes';
-        this.security = new SecurityManager();
+        this.firebaseAuth = new FirebaseAuth();
+        this.currentUser = null;
         this.checkAuthAndInit();
     }
 
     async checkAuthAndInit() {
-        // Check if user is authenticated
-        if (!this.security.isAuthenticated()) {
-            this.security.renderLoginScreen(() => {
+        // Listen for auth state changes
+        this.firebaseAuth.onAuthStateChanged((user) => {
+            if (user) {
+                this.currentUser = user;
                 this.init();
-            });
-            return;
-        }
-
-        await this.init();
+            } else {
+                this.currentUser = null;
+                this.firebaseAuth.renderAuthScreen((user) => {
+                    this.currentUser = user;
+                    this.init();
+                });
+            }
+        });
     }
 
     async init() {
