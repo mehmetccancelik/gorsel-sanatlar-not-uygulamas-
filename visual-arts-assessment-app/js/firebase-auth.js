@@ -221,10 +221,16 @@ class FirebaseAuth {
                 return;
             }
 
+            document.getElementById('loginBtn').disabled = true;
+            document.getElementById('loginBtn').textContent = 'Giriş yapılıyor...';
+
             const result = await this.login(email, password);
             if (result.success) {
-                onSuccess(result.user);
+                // Reload page for clean initialization
+                window.location.reload();
             } else {
+                document.getElementById('loginBtn').disabled = false;
+                document.getElementById('loginBtn').textContent = 'Giriş Yap';
                 this.showError(result.error);
             }
         });
@@ -240,10 +246,16 @@ class FirebaseAuth {
                 return;
             }
 
+            document.getElementById('registerBtn').disabled = true;
+            document.getElementById('registerBtn').textContent = 'Kayıt yapılıyor...';
+
             const result = await this.register(email, password, name);
             if (result.success) {
-                onSuccess(result.user);
+                // Reload page for clean initialization
+                window.location.reload();
             } else {
+                document.getElementById('registerBtn').disabled = false;
+                document.getElementById('registerBtn').textContent = 'Kayıt Ol';
                 this.showError(result.error);
             }
         });
