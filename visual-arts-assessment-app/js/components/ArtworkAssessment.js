@@ -369,6 +369,7 @@ class ArtworkAssessment {
         const container = document.getElementById('currentStudentPanel');
         const template = this.templates.find(t => t.id === this.batchMode.templateId);
         const assessments = await db.getAssessmentsByArtwork(this.currentArtwork.id);
+        const photos = await db.getProgressPhotosByArtwork(this.currentArtwork.id);
 
         const prevDisabled = this.batchMode.currentIndex === 0 ? 'disabled' : '';
         const nextDisabled = this.batchMode.currentIndex >= this.batchMode.students.length - 1 ? 'disabled' : '';
@@ -381,6 +382,32 @@ class ArtworkAssessment {
                         <span class="text-light">(${student.studentNumber})</span>
                     </h3>
                     <span class="text-light">${this.batchMode.currentIndex + 1} / ${this.batchMode.students.length}</span>
+                </div>
+                
+                <!-- Photo Section -->
+                <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg); border-radius: 0.5rem;">
+                    <h4 style="margin: 0 0 0.75rem 0;">📷 Fotoğraf</h4>
+                    <div class="camera-container">
+                        <video id="batchCameraVideo" class="camera-video hidden" autoplay playsinline style="max-width: 100%; border-radius: 0.5rem;"></video>
+                        <canvas id="batchPhotoCanvas" class="hidden"></canvas>
+                    </div>
+                    <div class="camera-controls" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                        <button class="btn btn-primary btn-sm" id="batchStartCameraBtn">📷 Kamera</button>
+                        <button class="btn btn-success btn-sm hidden" id="batchCaptureBtn">Çek</button>
+                        <button class="btn btn-secondary btn-sm hidden" id="batchStopCameraBtn">Kapat</button>
+                        <input type="file" id="batchUploadPhoto" accept="image/*" class="hidden">
+                        <button class="btn btn-secondary btn-sm" id="batchUploadPhotoBtn">📁 Dosya</button>
+                    </div>
+                    
+                    <!-- Photo Gallery -->
+                    <div class="photo-gallery" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        ${photos.length > 0 ? photos.map(photo => `
+                            <div class="photo-item" style="position: relative; width: 80px; height: 80px;">
+                                <img src="${photo.photoUrl}" alt="Fotoğraf" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0.25rem; cursor: pointer;" data-photo-url="${photo.photoUrl}">
+                                <button class="btn-delete-photo" data-photo-id="${photo.id}" style="position: absolute; top: 2px; right: 2px; background: rgba(220,53,69,0.9); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px; line-height: 1;">×</button>
+                            </div>
+                        `).join('') : '<span class="text-light">Henüz fotoğraf yok</span>'}
+                    </div>
                 </div>
                 
                 <h4>Değerlendirme Ölçütleri</h4>
@@ -416,6 +443,9 @@ class ArtworkAssessment {
             </div>
         `;
 
+        // Attach photo event listeners
+        this.attachBatchPhotoListeners();
+
         // Slider value display
         container.querySelectorAll('.batch-slider').forEach(slider => {
             slider.addEventListener('input', (e) => {
@@ -444,6 +474,134 @@ class ArtworkAssessment {
         // Save and next button
         document.getElementById('batchSaveBtn')?.addEventListener('click', () => {
             this.saveBatchAssessment();
+        });
+    }
+
+    attachBatchPhotoListeners() {
+        const startCameraBtn = document.getElementById('batchStartCameraBtn');
+        const captureBtn = document.getElementById('batchCaptureBtn');
+        const stopCameraBtn = document.getElementById('batchStopCameraBtn');
+        const uploadPhotoBtn = document.getElementById('batchUploadPhotoBtn');
+        const uploadInput = document.getElementById('batchUploadPhoto');
+        const video = document.getElementById('batchCameraVideo');
+        const canvas = document.getElementById('batchPhotoCanvas');
+
+        // Start Camera
+        startCameraBtn?.addEventListener('click', async () => {
+            try {
+                await this.camera.start(video);
+                video.classList.remove('hidden');
+                startCameraBtn.classList.add('hidden');
+                captureBtn.classList.remove('hidden');
+                stopCameraBtn.classList.remove('hidden');
+            } catch (error) {
+                this.showToast('Kamera açılamadı: ' + error.message, 'error');
+            }
+        });
+
+        // Capture Photo
+        captureBtn?.addEventListener('click', async () => {
+            try {
+                const photoUrl = await this.camera.capture(video, canvas);
+
+                // Save to storage
+                const savedUrl = await Storage.savePhoto(photoUrl, this.currentArtwork.id);
+
+                // Add to database
+                await db.addProgressPhoto({
+                    artworkId: this.currentArtwork.id,
+                    photoUrl: savedUrl,
+                    capturedAt: new Date().toISOString()
+                });
+
+                this.showToast('Fotoğraf kaydedildi!', 'success');
+
+                // Refresh to show new photo
+                const student = this.batchMode.students[this.batchMode.currentIndex];
+                await this.renderBatchAssessment(student);
+            } catch (error) {
+                this.showToast('Fotoğraf çekilemedi: ' + error.message, 'error');
+            }
+        });
+
+        // Stop Camera
+        stopCameraBtn?.addEventListener('click', () => {
+            this.camera.stop();
+            video.classList.add('hidden');
+            startCameraBtn.classList.remove('hidden');
+            captureBtn.classList.add('hidden');
+            stopCameraBtn.classList.add('hidden');
+        });
+
+        // Upload button triggers file input
+        uploadPhotoBtn?.addEventListener('click', () => {
+            uploadInput?.click();
+        });
+
+        // File upload
+        uploadInput?.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const photoUrl = event.target.result;
+
+                    // Save to storage
+                    const savedUrl = await Storage.savePhoto(photoUrl, this.currentArtwork.id);
+
+                    // Add to database
+                    await db.addProgressPhoto({
+                        artworkId: this.currentArtwork.id,
+                        photoUrl: savedUrl,
+                        capturedAt: new Date().toISOString()
+                    });
+
+                    this.showToast('Fotoğraf yüklendi!', 'success');
+
+                    // Refresh to show new photo
+                    const student = this.batchMode.students[this.batchMode.currentIndex];
+                    await this.renderBatchAssessment(student);
+                };
+                reader.readAsDataURL(file);
+            } catch (error) {
+                this.showToast('Fotoğraf yüklenemedi: ' + error.message, 'error');
+            }
+
+            // Reset input
+            uploadInput.value = '';
+        });
+
+        // Delete photo buttons
+        document.querySelectorAll('.btn-delete-photo').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const photoId = btn.getAttribute('data-photo-id');
+
+                if (confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) {
+                    try {
+                        await db.deleteProgressPhoto(photoId);
+                        this.showToast('Fotoğraf silindi', 'success');
+
+                        // Refresh
+                        const student = this.batchMode.students[this.batchMode.currentIndex];
+                        await this.renderBatchAssessment(student);
+                    } catch (error) {
+                        this.showToast('Fotoğraf silinemedi', 'error');
+                    }
+                }
+            });
+        });
+
+        // Photo preview click
+        document.querySelectorAll('.photo-gallery img').forEach(img => {
+            img.addEventListener('click', () => {
+                const photoUrl = img.getAttribute('data-photo-url');
+                if (photoUrl) {
+                    window.open(photoUrl, '_blank');
+                }
+            });
         });
     }
 
