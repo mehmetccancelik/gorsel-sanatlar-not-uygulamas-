@@ -249,6 +249,25 @@ class App {
             toast.remove();
         }, 3000);
     }
+
+    // State management for navigation between components
+    static saveState(key, value) {
+        try {
+            localStorage.setItem(`app_state_${key}`, JSON.stringify(value));
+        } catch (e) {
+            console.error('Failed to save state:', e);
+        }
+    }
+
+    static loadState(key) {
+        try {
+            const value = localStorage.getItem(`app_state_${key}`);
+            return value ? JSON.parse(value) : null;
+        } catch (e) {
+            console.error('Failed to load state:', e);
+            return null;
+        }
+    }
 }
 
 // Initialize app when DOM is ready
