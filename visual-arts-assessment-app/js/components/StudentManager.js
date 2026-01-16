@@ -249,10 +249,113 @@ class StudentManager {
     }
 
     async parseExcel(file) {
-        // For Excel files, we'll use a simple approach
-        // In a production app, you'd use a library like SheetJS
-        this.showToast('Excel desteği için CSV formatını kullanın veya Excel\'i CSV olarak kaydedin', 'warning');
-        return [];
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    // Get first sheet
+                    const sheetName = workbook.SheetNames[0];
+                    const sheet = workbook.Sheets[sheetName];
+
+                    // Convert to JSON
+                    const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+                    if (jsonData.length < 2) {
+                        reject(new Error('Excel dosyası boş veya geçersiz'));
+                        return;
+                    }
+
+                    // Find column indexes (smart detection for E-Okul format)
+                    const headerRow = jsonData[0].map(h => String(h).toLowerCase().trim());
+
+                    // Look for column names in Turkish and English
+                    let noIndex = -1;
+                    let adIndex = -1;
+                    let soyadIndex = -1;
+                    let adSoyadIndex = -1;
+
+                    // Column name variations
+                    const noVariants = ['no', 'öğrenci no', 'ogrenci no', 'numara', 'sıra no', 'sira no', 'öğrenci numarası', 'ogrenci numarasi'];
+                    const adVariants = ['ad', 'adı', 'adi', 'öğrenci adı', 'ogrenci adi', 'first name'];
+                    const soyadVariants = ['soyad', 'soyadı', 'soyadi', 'surname', 'last name'];
+                    const adSoyadVariants = ['ad soyad', 'adsoyad', 'ad-soyad', 'adı soyadı', 'adi soyadi', 'öğrenci', 'ogrenci', 'full name', 'isim'];
+
+                    headerRow.forEach((header, index) => {
+                        if (noVariants.some(v => header.includes(v))) noIndex = index;
+                        if (adVariants.some(v => header === v || header.includes(v))) adIndex = index;
+                        if (soyadVariants.some(v => header === v || header.includes(v))) soyadIndex = index;
+                        if (adSoyadVariants.some(v => header === v || header.includes(v))) adSoyadIndex = index;
+                    });
+
+                    console.log('Detected columns:', { noIndex, adIndex, soyadIndex, adSoyadIndex });
+
+                    const students = [];
+
+                    // Skip header row, process data rows
+                    for (let i = 1; i < jsonData.length; i++) {
+                        const row = jsonData[i];
+                        if (!row || row.length === 0) continue;
+
+                        let name = '';
+                        let studentNo = '';
+
+                        // Get student number
+                        if (noIndex >= 0 && row[noIndex]) {
+                            studentNo = String(row[noIndex]).trim();
+                        } else if (row[0]) {
+                            // If no column found, use first column as number
+                            studentNo = String(row[0]).trim();
+                        }
+
+                        // Get student name
+                        if (adIndex >= 0 && soyadIndex >= 0) {
+                            // Separate Ad and Soyad columns (E-Okul format)
+                            const ad = String(row[adIndex] || '').trim();
+                            const soyad = String(row[soyadIndex] || '').trim();
+                            name = `${ad} ${soyad}`.trim();
+                        } else if (adSoyadIndex >= 0 && row[adSoyadIndex]) {
+                            // Combined Ad Soyad column
+                            name = String(row[adSoyadIndex]).trim();
+                        } else if (row[1]) {
+                            // Fallback: use second column as name
+                            name = String(row[1]).trim();
+                            // Check if third column might be surname
+                            if (row[2] && typeof row[2] === 'string' && !row[2].match(/^\d+$/)) {
+                                name = `${name} ${String(row[2]).trim()}`;
+                            }
+                        }
+
+                        // Skip if no valid data
+                        if (!name || name.length < 2) continue;
+
+                        // Generate student number if not found
+                        if (!studentNo) {
+                            studentNo = String(i);
+                        }
+
+                        students.push({
+                            name: name,
+                            studentNumber: studentNo,
+                            classId: null
+                        });
+                    }
+
+                    console.log(`Parsed ${students.length} students from Excel`);
+                    resolve(students);
+
+                } catch (error) {
+                    console.error('Excel parsing error:', error);
+                    reject(error);
+                }
+            };
+
+            reader.onerror = () => reject(new Error('Dosya okunamadı'));
+            reader.readAsArrayBuffer(file);
+        });
     }
 
     async showImportPreview(students) {
