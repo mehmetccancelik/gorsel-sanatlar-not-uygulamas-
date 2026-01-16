@@ -26,22 +26,64 @@ class ArtworkAssessment {
                     <h2 class="card-title">Çalışma Değerlendirme</h2>
                 </div>
                 
+                <!-- Step 1: Class Selection (Fixed) -->
                 <div class="form-group">
-                    <label class="form-label">Sınıf Seç</label>
+                    <label class="form-label">1. Sınıf Seç</label>
                     <select class="form-select" id="selectClass">
                         <option value="">Önce sınıf seçin...</option>
                     </select>
                 </div>
                 
-                <div class="form-group">
-                    <label class="form-label">Öğrenci Seç</label>
-                    <select class="form-select" id="selectStudent" disabled>
-                        <option value="">Önce sınıf seçin...</option>
+                <!-- Step 2: Template/Artwork Selection (Fixed) -->
+                <div class="form-group" id="templateSelectGroup" style="display: none;">
+                    <label class="form-label">2. Çalışma Türü Seç (Şablon)</label>
+                    <select class="form-select" id="selectTemplate">
+                        <option value="">Şablon seçin...</option>
                     </select>
                 </div>
                 
-                <div id="studentArtworks" class="hidden"></div>
-                <div id="assessmentArea" class="hidden"></div>
+                <!-- Step 3: Artwork Title (Fixed) -->
+                <div class="form-group" id="artworkTitleGroup" style="display: none;">
+                    <label class="form-label">3. Çalışma Başlığı</label>
+                    <input type="text" class="form-input" id="batchArtworkTitle" placeholder="örn: Natürmort Çalışması">
+                </div>
+                
+                <!-- Start Batch Mode Button -->
+                <div id="batchStartGroup" style="display: none; margin-top: 1rem;">
+                    <button class="btn btn-primary btn-lg" id="startBatchBtn">🚀 Toplu Değerlendirme Başlat</button>
+                </div>
+                
+                <!-- Batch Mode Active Panel -->
+                <div id="batchModePanel" class="hidden" style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-alt); border-radius: 0.75rem; border: 2px solid var(--primary);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div>
+                            <h3 style="margin: 0;">📋 Toplu Değerlendirme Modu</h3>
+                            <p id="batchInfo" class="text-light" style="margin: 0.25rem 0 0 0;"></p>
+                        </div>
+                        <button class="btn btn-sm btn-secondary" id="exitBatchBtn">Çıkış</button>
+                    </div>
+                    
+                    <!-- Student Progress -->
+                    <div id="studentProgress" style="margin-bottom: 1rem;">
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;"></div>
+                    </div>
+                    
+                    <!-- Current Student Assessment -->
+                    <div id="currentStudentPanel"></div>
+                </div>
+                
+                <!-- Legacy Mode (Individual) -->
+                <div id="legacyMode">
+                    <div class="form-group" style="margin-top: 1rem;">
+                        <label class="form-label">Veya Öğrenci Seç (Tek Değerlendirme)</label>
+                        <select class="form-select" id="selectStudent" disabled>
+                            <option value="">Önce sınıf seçin...</option>
+                        </select>
+                    </div>
+                    
+                    <div id="studentArtworks" class="hidden"></div>
+                    <div id="assessmentArea" class="hidden"></div>
+                </div>
             </div>
         `;
 
@@ -94,9 +136,22 @@ class ArtworkAssessment {
     }
 
     attachEventListeners() {
+        // Batch mode state
+        this.batchMode = {
+            active: false,
+            classId: null,
+            templateId: null,
+            artworkTitle: '',
+            students: [],
+            currentIndex: 0,
+            completedStudents: new Set()
+        };
+
         document.getElementById('selectClass').addEventListener('change', (e) => {
             const classId = e.target.value;
             const studentSelect = document.getElementById('selectStudent');
+            const templateGroup = document.getElementById('templateSelectGroup');
+            const templateSelect = document.getElementById('selectTemplate');
 
             // Save class selection
             App.saveState('assessment_classId', classId);
@@ -107,17 +162,61 @@ class ArtworkAssessment {
                 studentSelect.disabled = false;
                 studentSelect.innerHTML = '<option value="">Öğrenci seçin...</option>' +
                     filteredStudents.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+                // Get class grade level
+                const selectedClass = this.classes.find(c => c.id === classId);
+                const gradeLevel = selectedClass?.name?.match(/^\d+/)?.[0];
+
+                // Filter templates by grade
+                const availableTemplates = this.templates.filter(t =>
+                    t.gradeLevel === 'all' || t.gradeLevel === gradeLevel
+                );
+
+                // Show template selection
+                templateGroup.style.display = 'block';
+                templateSelect.innerHTML = '<option value="">Şablon seçin...</option>' +
+                    availableTemplates.map(t => `<option value="${t.id}">${t.name} (${t.gradeLevel === 'all' ? 'Tüm Sınıflar' : t.gradeLevel + '. Sınıf'})</option>`).join('');
             } else {
                 studentSelect.disabled = true;
                 studentSelect.innerHTML = '<option value="">Önce sınıf seçin...</option>';
+                templateGroup.style.display = 'none';
+                document.getElementById('artworkTitleGroup').style.display = 'none';
+                document.getElementById('batchStartGroup').style.display = 'none';
                 App.saveState('assessment_studentId', null);
             }
 
             // Hide artworks and assessment areas
             document.getElementById('studentArtworks').classList.add('hidden');
             document.getElementById('assessmentArea').classList.add('hidden');
+            document.getElementById('batchModePanel').classList.add('hidden');
         });
 
+        // Template selection
+        document.getElementById('selectTemplate').addEventListener('change', (e) => {
+            const templateId = e.target.value;
+            const artworkTitleGroup = document.getElementById('artworkTitleGroup');
+            const batchStartGroup = document.getElementById('batchStartGroup');
+
+            if (templateId) {
+                artworkTitleGroup.style.display = 'block';
+                batchStartGroup.style.display = 'block';
+            } else {
+                artworkTitleGroup.style.display = 'none';
+                batchStartGroup.style.display = 'none';
+            }
+        });
+
+        // Start Batch Mode
+        document.getElementById('startBatchBtn').addEventListener('click', () => {
+            this.startBatchMode();
+        });
+
+        // Exit Batch Mode
+        document.getElementById('exitBatchBtn').addEventListener('click', () => {
+            this.exitBatchMode();
+        });
+
+        // Legacy single student selection
         document.getElementById('selectStudent').addEventListener('change', (e) => {
             const studentId = e.target.value;
 
@@ -131,6 +230,286 @@ class ArtworkAssessment {
                 document.getElementById('assessmentArea').classList.add('hidden');
             }
         });
+    }
+
+    startBatchMode() {
+        const classId = document.getElementById('selectClass').value;
+        const templateId = document.getElementById('selectTemplate').value;
+        const artworkTitle = document.getElementById('batchArtworkTitle').value.trim();
+
+        if (!classId || !templateId) {
+            this.showToast('Lütfen sınıf ve şablon seçin', 'warning');
+            return;
+        }
+
+        if (!artworkTitle) {
+            this.showToast('Lütfen çalışma başlığı girin', 'warning');
+            return;
+        }
+
+        const filteredStudents = this.students.filter(s => s.classId === classId);
+
+        if (filteredStudents.length === 0) {
+            this.showToast('Bu sınıfta öğrenci yok', 'warning');
+            return;
+        }
+
+        // Initialize batch mode
+        this.batchMode = {
+            active: true,
+            classId,
+            templateId,
+            artworkTitle,
+            students: filteredStudents,
+            currentIndex: 0,
+            completedStudents: new Set()
+        };
+
+        const template = this.templates.find(t => t.id === templateId);
+        const selectedClass = this.classes.find(c => c.id === classId);
+
+        // Update UI
+        document.getElementById('legacyMode').style.display = 'none';
+        document.getElementById('selectClass').disabled = true;
+        document.getElementById('selectTemplate').disabled = true;
+        document.getElementById('batchArtworkTitle').disabled = true;
+        document.getElementById('batchStartGroup').style.display = 'none';
+
+        const batchPanel = document.getElementById('batchModePanel');
+        batchPanel.classList.remove('hidden');
+
+        document.getElementById('batchInfo').innerHTML =
+            `<strong>${selectedClass?.name}</strong> • ${template?.name} • "${artworkTitle}" • ${filteredStudents.length} öğrenci`;
+
+        this.renderStudentProgress();
+        this.loadCurrentStudent();
+    }
+
+    exitBatchMode() {
+        this.batchMode.active = false;
+
+        // Reset UI
+        document.getElementById('legacyMode').style.display = 'block';
+        document.getElementById('selectClass').disabled = false;
+        document.getElementById('selectTemplate').disabled = false;
+        document.getElementById('batchArtworkTitle').disabled = false;
+        document.getElementById('batchStartGroup').style.display = 'block';
+        document.getElementById('batchModePanel').classList.add('hidden');
+        document.getElementById('currentStudentPanel').innerHTML = '';
+    }
+
+    renderStudentProgress() {
+        const container = document.getElementById('studentProgress').querySelector('div');
+        container.innerHTML = this.batchMode.students.map((student, index) => {
+            let status = '';
+            let bgColor = 'var(--bg)';
+
+            if (this.batchMode.completedStudents.has(student.id)) {
+                status = '✅';
+                bgColor = 'var(--success)';
+            } else if (index === this.batchMode.currentIndex) {
+                status = '📝';
+                bgColor = 'var(--primary)';
+            }
+
+            return `
+                <button class="btn btn-sm ${index === this.batchMode.currentIndex ? '' : 'btn-secondary'}" 
+                    data-batch-student="${index}"
+                    style="background: ${bgColor}; min-width: 2.5rem;">
+                    ${status || (index + 1)}
+                </button>
+            `;
+        }).join('');
+
+        // Add click handlers to switch students
+        container.querySelectorAll('[data-batch-student]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const index = parseInt(e.target.getAttribute('data-batch-student'));
+                this.batchMode.currentIndex = index;
+                this.renderStudentProgress();
+                this.loadCurrentStudent();
+            });
+        });
+    }
+
+    async loadCurrentStudent() {
+        const student = this.batchMode.students[this.batchMode.currentIndex];
+        if (!student) return;
+
+        const container = document.getElementById('currentStudentPanel');
+
+        // Check if artwork already exists for this student
+        const existingArtwork = this.artworks.find(a =>
+            a.studentId === student.id &&
+            a.templateId === this.batchMode.templateId &&
+            a.title === this.batchMode.artworkTitle
+        );
+
+        if (existingArtwork) {
+            this.currentArtwork = existingArtwork;
+        } else {
+            // Create new artwork for this student
+            const artworkId = await db.addArtwork({
+                studentId: student.id,
+                templateId: this.batchMode.templateId,
+                title: this.batchMode.artworkTitle,
+                totalScore: 0
+            });
+
+            // Refresh artworks list
+            this.artworks = await db.getArtworks();
+            this.currentArtwork = await db.get('artworks', artworkId);
+        }
+
+        // Render assessment for current student
+        await this.renderBatchAssessment(student);
+    }
+
+    async renderBatchAssessment(student) {
+        const container = document.getElementById('currentStudentPanel');
+        const template = this.templates.find(t => t.id === this.batchMode.templateId);
+        const assessments = await db.getAssessmentsByArtwork(this.currentArtwork.id);
+
+        const prevDisabled = this.batchMode.currentIndex === 0 ? 'disabled' : '';
+        const nextDisabled = this.batchMode.currentIndex >= this.batchMode.students.length - 1 ? 'disabled' : '';
+
+        container.innerHTML = `
+            <div style="background: var(--card-bg); padding: 1.5rem; border-radius: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0;">
+                        👤 ${student.name} 
+                        <span class="text-light">(${student.studentNumber})</span>
+                    </h3>
+                    <span class="text-light">${this.batchMode.currentIndex + 1} / ${this.batchMode.students.length}</span>
+                </div>
+                
+                <h4>Değerlendirme Ölçütleri</h4>
+                <div class="criteria-list">
+                    ${template.criteria.map(criterion => {
+            const existing = assessments.find(a => a.criteriaId === criterion.id);
+            const value = existing ? existing.rawScore : 5;
+            return `
+                            <div class="criterion-item" style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg); border-radius: 0.5rem;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <span>${criterion.name}</span>
+                                    <span class="text-light">Ağırlık: ${criterion.weight}%</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="range" min="1" max="10" value="${value}" 
+                                        data-criterion-id="${criterion.id}" 
+                                        data-weight="${criterion.weight}"
+                                        class="form-range batch-slider" style="flex: 1;">
+                                    <span class="score-display-mini batch-score-${criterion.id}" style="min-width: 2rem; text-align: center; font-weight: bold;">${value}</span>
+                                </div>
+                            </div>
+                        `;
+        }).join('')}
+                </div>
+                
+                <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem; justify-content: space-between;">
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-secondary" id="batchPrevBtn" ${prevDisabled}>◀ Önceki</button>
+                        <button class="btn btn-secondary" id="batchNextBtn" ${nextDisabled}>Sonraki ▶</button>
+                    </div>
+                    <button class="btn btn-success" id="batchSaveBtn">💾 Kaydet ve Sonrakine Geç</button>
+                </div>
+            </div>
+        `;
+
+        // Slider value display
+        container.querySelectorAll('.batch-slider').forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const criterionId = e.target.getAttribute('data-criterion-id');
+                document.querySelector(`.batch-score-${criterionId}`).textContent = e.target.value;
+            });
+        });
+
+        // Navigation buttons
+        document.getElementById('batchPrevBtn')?.addEventListener('click', () => {
+            if (this.batchMode.currentIndex > 0) {
+                this.batchMode.currentIndex--;
+                this.renderStudentProgress();
+                this.loadCurrentStudent();
+            }
+        });
+
+        document.getElementById('batchNextBtn')?.addEventListener('click', () => {
+            if (this.batchMode.currentIndex < this.batchMode.students.length - 1) {
+                this.batchMode.currentIndex++;
+                this.renderStudentProgress();
+                this.loadCurrentStudent();
+            }
+        });
+
+        // Save and next button
+        document.getElementById('batchSaveBtn')?.addEventListener('click', () => {
+            this.saveBatchAssessment();
+        });
+    }
+
+    async saveBatchAssessment() {
+        try {
+            const template = this.templates.find(t => t.id === this.batchMode.templateId);
+            if (!template) {
+                this.showToast('Şablon bulunamadı', 'error');
+                return;
+            }
+
+            // Delete old assessments
+            const oldAssessments = await db.getAssessmentsByArtwork(this.currentArtwork.id);
+            for (const assessment of oldAssessments) {
+                await db.deleteAssessment(assessment.id);
+            }
+
+            // Save new assessments
+            const assessments = [];
+            for (const criterion of template.criteria) {
+                const slider = document.querySelector(`[data-criterion-id="${criterion.id}"]`);
+                if (!slider) continue;
+
+                const rawScore = parseFloat(slider.value);
+                const weight = parseFloat(slider.getAttribute('data-weight'));
+                const score = ScoreCalculator.calculateCriterionScore(rawScore, weight, 10);
+
+                await db.addAssessment({
+                    artworkId: this.currentArtwork.id,
+                    criteriaId: criterion.id,
+                    rawScore,
+                    weight,
+                    score
+                });
+
+                assessments.push({ rawScore, weight, score });
+            }
+
+            // Update artwork total score
+            const totalScore = ScoreCalculator.calculateTotalScore(assessments, 10);
+            await db.updateArtwork(this.currentArtwork.id, { totalScore });
+
+            // Mark student as completed
+            const currentStudent = this.batchMode.students[this.batchMode.currentIndex];
+            this.batchMode.completedStudents.add(currentStudent.id);
+
+            // Refresh artworks
+            this.artworks = await db.getArtworks();
+
+            this.showToast(`${currentStudent.name}: ${totalScore.toFixed(1)} puan kaydedildi!`, 'success');
+
+            // Move to next student if available
+            if (this.batchMode.currentIndex < this.batchMode.students.length - 1) {
+                this.batchMode.currentIndex++;
+                this.renderStudentProgress();
+                this.loadCurrentStudent();
+            } else {
+                // All students done
+                this.showToast('🎉 Tüm öğrenciler değerlendirildi!', 'success');
+                this.renderStudentProgress();
+            }
+
+        } catch (error) {
+            console.error('Error saving batch assessment:', error);
+            this.showToast('Hata: ' + error.message, 'error');
+        }
     }
 
     async showStudentArtworks(studentId) {
