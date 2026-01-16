@@ -4,7 +4,7 @@ class SecurityManager {
         this.defaultPin = '1234';
         this.sessionKey = 'app_session';
         this.pinKey = 'app_pin';
-        this.sessionDuration = 24 * 60 * 60 * 1000; // 24 hours
+        this.sessionDuration = 0; // Always ask for PIN on each visit
     }
 
     // Check if user is authenticated
