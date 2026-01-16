@@ -99,16 +99,27 @@ class StudentManager {
         }
 
         container.innerHTML = `
+            <div class="bulk-actions" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="selectAllStudents">
+                    <span>Tümünü Seç</span>
+                </label>
+                <button class="btn btn-sm btn-danger" id="bulkDeleteBtn" disabled>Seçilenleri Sil</button>
+                <span id="selectedCount" class="text-light" style="margin-left: 0.5rem;"></span>
+            </div>
             <ul class="list">
                 ${filteredStudents.map(student => {
             const studentClass = this.classes.find(c => c.id === student.classId);
             return `
                         <li class="list-item">
-                            <div>
-                                <strong>${student.name}</strong>
-                                <span class="text-light"> - ${student.studentNumber}</span>
-                                <br>
-                                <small class="text-light">Sınıf: ${studentClass?.name || 'Belirtilmemiş'}</small>
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <input type="checkbox" class="student-checkbox" data-id="${student.id}">
+                                <div>
+                                    <strong>${student.name}</strong>
+                                    <span class="text-light"> - ${student.studentNumber}</span>
+                                    <br>
+                                    <small class="text-light">Sınıf: ${studentClass?.name || 'Belirtilmemiş'}</small>
+                                </div>
                             </div>
                             <div class="list-item-actions">
                                 <button class="btn btn-sm btn-secondary" data-edit="${student.id}">Düzenle</button>
@@ -121,6 +132,50 @@ class StudentManager {
         `;
 
         this.attachListEventListeners();
+        this.attachBulkActionListeners();
+    }
+
+    attachBulkActionListeners() {
+        const selectAllCheckbox = document.getElementById('selectAllStudents');
+        const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+        const selectedCountSpan = document.getElementById('selectedCount');
+
+        const updateBulkState = () => {
+            const checkboxes = document.querySelectorAll('.student-checkbox');
+            const checkedBoxes = document.querySelectorAll('.student-checkbox:checked');
+            const checkedCount = checkedBoxes.length;
+
+            bulkDeleteBtn.disabled = checkedCount === 0;
+            selectedCountSpan.textContent = checkedCount > 0 ? `${checkedCount} seçili` : '';
+            selectAllCheckbox.checked = checkboxes.length > 0 && checkedCount === checkboxes.length;
+            selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+        };
+
+        selectAllCheckbox?.addEventListener('change', (e) => {
+            document.querySelectorAll('.student-checkbox').forEach(cb => {
+                cb.checked = e.target.checked;
+            });
+            updateBulkState();
+        });
+
+        document.querySelectorAll('.student-checkbox').forEach(cb => {
+            cb.addEventListener('change', updateBulkState);
+        });
+
+        bulkDeleteBtn?.addEventListener('click', async () => {
+            const checkedBoxes = document.querySelectorAll('.student-checkbox:checked');
+            const ids = Array.from(checkedBoxes).map(cb => cb.dataset.id);
+
+            if (ids.length === 0) return;
+
+            if (confirm(`${ids.length} öğrenciyi silmek istediğinizden emin misiniz?`)) {
+                for (const id of ids) {
+                    await db.deleteStudent(id);
+                }
+                await this.loadData();
+                this.showToast(`${ids.length} öğrenci silindi`, 'success');
+            }
+        });
     }
 
     attachEventListeners() {
@@ -311,8 +366,8 @@ class StudentManager {
                             studentNo = String(row[0]).trim();
                         }
 
-                        // Get student name
-                        if (adIndex >= 0 && soyadIndex >= 0) {
+                        // Get student name (use first matching method only)
+                        if (adIndex >= 0 && soyadIndex >= 0 && adIndex !== soyadIndex) {
                             // Separate Ad and Soyad columns (E-Okul format)
                             const ad = String(row[adIndex] || '').trim();
                             const soyad = String(row[soyadIndex] || '').trim();
@@ -320,12 +375,20 @@ class StudentManager {
                         } else if (adSoyadIndex >= 0 && row[adSoyadIndex]) {
                             // Combined Ad Soyad column
                             name = String(row[adSoyadIndex]).trim();
-                        } else if (row[1]) {
-                            // Fallback: use second column as name
-                            name = String(row[1]).trim();
-                            // Check if third column might be surname
-                            if (row[2] && typeof row[2] === 'string' && !row[2].match(/^\d+$/)) {
-                                name = `${name} ${String(row[2]).trim()}`;
+                        } else {
+                            // Fallback: try to find name in columns
+                            // Look for text columns (not numbers)
+                            for (let col = 1; col < Math.min(row.length, 5); col++) {
+                                const val = row[col];
+                                if (val && typeof val === 'string' && val.trim().length > 1 && !val.match(/^\d+$/)) {
+                                    if (!name) {
+                                        name = val.trim();
+                                    } else if (name !== val.trim()) {
+                                        // If next column is also text and different, it might be surname
+                                        name = `${name} ${val.trim()}`;
+                                        break;
+                                    }
+                                }
                             }
                         }
 
