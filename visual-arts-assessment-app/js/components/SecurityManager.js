@@ -93,10 +93,8 @@ class SecurityManager {
                         <input type="password" 
                                id="pinInput" 
                                class="pin-input" 
-                               maxlength="6" 
-                               placeholder="••••"
-                               inputmode="numeric"
-                               pattern="[0-9]*"
+                               maxlength="20" 
+                               placeholder="Şifre girin..."
                                autocomplete="off">
                     </div>
                     
