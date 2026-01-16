@@ -1,446 +1,302 @@
-// Database Layer - IndexedDB for offline storage
-// This provides local storage that syncs with Firebase when online
+// Firestore Database Layer
+// Cloud storage with user-based data isolation
 
-class Database {
+class FirestoreDB {
     constructor() {
-        this.dbName = 'VisualArtsDB';
-        this.version = 3; // Upgraded for schools, academicYears
         this.db = null;
+        this.userId = null;
+        this.initialized = false;
     }
 
     async init() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, this.version);
-
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => {
-                this.db = request.result;
-                resolve(this.db);
+        // Wait for Firebase to be ready
+        if (!firebase.apps.length) {
+            const firebaseConfig = {
+                apiKey: "AIzaSyA88j_2_FUs4akPDD0p-7DobQiME0P_ue4",
+                authDomain: "gorsel-sanatlar-app.firebaseapp.com",
+                projectId: "gorsel-sanatlar-app",
+                storageBucket: "gorsel-sanatlar-app.firebasestorage.app",
+                messagingSenderId: "450683935388",
+                appId: "1:450683935388:web:e187e42247fcb086aaeb59"
             };
+            firebase.initializeApp(firebaseConfig);
+        }
 
-            request.onupgradeneeded = (event) => {
-                const db = event.target.result;
+        this.db = firebase.firestore();
 
-                // Classes store
-                if (!db.objectStoreNames.contains('classes')) {
-                    const classStore = db.createObjectStore('classes', { keyPath: 'id' });
-                    classStore.createIndex('year', 'year', { unique: false });
-                }
+        // Get current user
+        const user = firebase.auth().currentUser;
+        if (user) {
+            this.userId = user.uid;
+        }
 
-                // Students store
-                if (!db.objectStoreNames.contains('students')) {
-                    const studentStore = db.createObjectStore('students', { keyPath: 'id' });
-                    studentStore.createIndex('classId', 'classId', { unique: false });
-                }
-
-                // Criteria Templates store
-                if (!db.objectStoreNames.contains('criteriaTemplates')) {
-                    db.createObjectStore('criteriaTemplates', { keyPath: 'id' });
-                }
-
-                // Artworks store
-                if (!db.objectStoreNames.contains('artworks')) {
-                    const artworkStore = db.createObjectStore('artworks', { keyPath: 'id' });
-                    artworkStore.createIndex('studentId', 'studentId', { unique: false });
-                    artworkStore.createIndex('status', 'status', { unique: false });
-                }
-
-                // Progress Photos store
-                if (!db.objectStoreNames.contains('progressPhotos')) {
-                    const photoStore = db.createObjectStore('progressPhotos', { keyPath: 'id' });
-                    photoStore.createIndex('artworkId', 'artworkId', { unique: false });
-                }
-
-                // Assessments store
-                if (!db.objectStoreNames.contains('assessments')) {
-                    const assessmentStore = db.createObjectStore('assessments', { keyPath: 'id' });
-                    assessmentStore.createIndex('artworkId', 'artworkId', { unique: false });
-                }
-
-                // Semester Grades store
-                if (!db.objectStoreNames.contains('semesterGrades')) {
-                    const gradeStore = db.createObjectStore('semesterGrades', { keyPath: 'id' });
-                    gradeStore.createIndex('studentId', 'studentId', { unique: false });
-                    gradeStore.createIndex('semester', 'semester', { unique: false });
-                }
-
-                // Schools store
-                if (!db.objectStoreNames.contains('schools')) {
-                    db.createObjectStore('schools', { keyPath: 'id' });
-                }
-
-                // Academic Years store
-                if (!db.objectStoreNames.contains('academicYears')) {
-                    const yearStore = db.createObjectStore('academicYears', { keyPath: 'id' });
-                    yearStore.createIndex('schoolId', 'schoolId', { unique: false });
-                }
-            };
-        });
+        this.initialized = true;
+        console.log('Firestore initialized for user:', this.userId);
+        return this.db;
     }
 
-    // Generic CRUD operations
-    async add(storeName, data) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction(storeName, 'readwrite');
-            const store = tx.objectStore(storeName);
-            const request = store.add(data);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+    // Helper to get user's collection path
+    getUserPath() {
+        if (!this.userId) {
+            this.userId = firebase.auth().currentUser?.uid;
+        }
+        return `users/${this.userId}`;
     }
 
-    async put(storeName, data) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction(storeName, 'readwrite');
-            const store = tx.objectStore(storeName);
-            const request = store.put(data);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async get(storeName, id) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction(storeName, 'readonly');
-            const store = tx.objectStore(storeName);
-            const request = store.get(id);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async getAll(storeName) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction(storeName, 'readonly');
-            const store = tx.objectStore(storeName);
-            const request = store.getAll();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async delete(storeName, id) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction(storeName, 'readwrite');
-            const store = tx.objectStore(storeName);
-            const request = store.delete(id);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async getByIndex(storeName, indexName, value) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction(storeName, 'readonly');
-            const store = tx.objectStore(storeName);
-            const index = store.index(indexName);
-            const request = index.getAll(value);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    // Specific methods for the app
-
-    // Classes
-    async addClass(classData) {
-        const id = 'class_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-        const data = {
-            id,
-            ...classData,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-        await this.add('classes', data);
-        return data;
-    }
-
+    // ==================== Classes ====================
     async getClasses() {
-        return this.getAll('classes');
+        const snapshot = await this.db.collection(`${this.getUserPath()}/classes`).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
-    async updateClass(id, updates) {
-        const existing = await this.get('classes', id);
-        const updated = {
-            ...existing,
-            ...updates,
-            updatedAt: new Date().toISOString()
-        };
-        await this.put('classes', updated);
-        return updated;
+    async addClass(classData) {
+        const id = classData.id || `class_${Date.now()}`;
+        const data = { ...classData, id, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+        await this.db.collection(`${this.getUserPath()}/classes`).doc(id).set(data);
+        return id;
+    }
+
+    async updateClass(id, classData) {
+        await this.db.collection(`${this.getUserPath()}/classes`).doc(id).update(classData);
     }
 
     async deleteClass(id) {
-        return this.delete('classes', id);
+        await this.db.collection(`${this.getUserPath()}/classes`).doc(id).delete();
     }
 
-    // Students
-    async addStudent(studentData) {
-        const id = 'student_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-        const data = {
-            id,
-            ...studentData,
-            createdAt: new Date().toISOString()
-        };
-        await this.add('students', data);
-        return data;
+    async getClassById(id) {
+        const doc = await this.db.collection(`${this.getUserPath()}/classes`).doc(id).get();
+        return doc.exists ? { id: doc.id, ...doc.data() } : null;
     }
 
+    // ==================== Students ====================
     async getStudents() {
-        return this.getAll('students');
+        const snapshot = await this.db.collection(`${this.getUserPath()}/students`).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
     async getStudentsByClass(classId) {
-        return this.getByIndex('students', 'classId', classId);
+        const snapshot = await this.db.collection(`${this.getUserPath()}/students`)
+            .where('classId', '==', classId).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
-    async updateStudent(id, updates) {
-        const existing = await this.get('students', id);
-        const updated = { ...existing, ...updates };
-        await this.put('students', updated);
-        return updated;
+    async addStudent(studentData) {
+        const id = studentData.id || `student_${Date.now()}`;
+        const data = { ...studentData, id, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+        await this.db.collection(`${this.getUserPath()}/students`).doc(id).set(data);
+        return id;
+    }
+
+    async updateStudent(id, studentData) {
+        await this.db.collection(`${this.getUserPath()}/students`).doc(id).update(studentData);
     }
 
     async deleteStudent(id) {
-        return this.delete('students', id);
+        await this.db.collection(`${this.getUserPath()}/students`).doc(id).delete();
     }
 
-    // Criteria Templates
-    async addCriteriaTemplate(templateData) {
-        const id = 'template_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-        const data = {
-            id,
-            ...templateData,
-            createdAt: new Date().toISOString()
-        };
-        await this.add('criteriaTemplates', data);
-        return data;
+    async getStudentById(id) {
+        const doc = await this.db.collection(`${this.getUserPath()}/students`).doc(id).get();
+        return doc.exists ? { id: doc.id, ...doc.data() } : null;
     }
 
+    // ==================== Criteria Templates ====================
     async getCriteriaTemplates() {
-        return this.getAll('criteriaTemplates');
+        const snapshot = await this.db.collection(`${this.getUserPath()}/criteriaTemplates`).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
-    async updateCriteriaTemplate(id, updates) {
-        const existing = await this.get('criteriaTemplates', id);
-        const updated = { ...existing, ...updates };
-        await this.put('criteriaTemplates', updated);
-        return updated;
+    async addCriteriaTemplate(templateData) {
+        const id = templateData.id || `template_${Date.now()}`;
+        const data = { ...templateData, id, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+        await this.db.collection(`${this.getUserPath()}/criteriaTemplates`).doc(id).set(data);
+        return id;
+    }
+
+    async updateCriteriaTemplate(id, templateData) {
+        await this.db.collection(`${this.getUserPath()}/criteriaTemplates`).doc(id).update(templateData);
     }
 
     async deleteCriteriaTemplate(id) {
-        return this.delete('criteriaTemplates', id);
+        await this.db.collection(`${this.getUserPath()}/criteriaTemplates`).doc(id).delete();
     }
 
-    // Artworks
-    async addArtwork(artworkData) {
-        const id = 'artwork_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-        const data = {
-            id,
-            ...artworkData,
-            status: 'in-progress',
-            totalScore: 0,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-        await this.add('artworks', data);
-        return data;
-    }
-
+    // ==================== Artworks ====================
     async getArtworks() {
-        return this.getAll('artworks');
+        const snapshot = await this.db.collection(`${this.getUserPath()}/artworks`).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
     async getArtworksByStudent(studentId) {
-        return this.getByIndex('artworks', 'studentId', studentId);
+        const snapshot = await this.db.collection(`${this.getUserPath()}/artworks`)
+            .where('studentId', '==', studentId).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
-    async updateArtwork(id, updates) {
-        const existing = await this.get('artworks', id);
-        const updated = {
-            ...existing,
-            ...updates,
-            updatedAt: new Date().toISOString()
-        };
-        await this.put('artworks', updated);
-        return updated;
+    async addArtwork(artworkData) {
+        const id = artworkData.id || `artwork_${Date.now()}`;
+        const data = { ...artworkData, id, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+        await this.db.collection(`${this.getUserPath()}/artworks`).doc(id).set(data);
+        return id;
+    }
+
+    async updateArtwork(id, artworkData) {
+        await this.db.collection(`${this.getUserPath()}/artworks`).doc(id).update(artworkData);
     }
 
     async deleteArtwork(id) {
-        return this.delete('artworks', id);
+        await this.db.collection(`${this.getUserPath()}/artworks`).doc(id).delete();
     }
 
-    // Progress Photos
+    // ==================== Progress Photos ====================
+    async getProgressPhotos() {
+        const snapshot = await this.db.collection(`${this.getUserPath()}/progressPhotos`).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+
+    async getProgressPhotosByArtwork(artworkId) {
+        const snapshot = await this.db.collection(`${this.getUserPath()}/progressPhotos`)
+            .where('artworkId', '==', artworkId).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+
     async addProgressPhoto(photoData) {
-        const id = 'photo_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-        const data = {
-            id,
-            ...photoData,
-            capturedAt: new Date().toISOString()
-        };
-        await this.add('progressPhotos', data);
-        return data;
-    }
-
-    async getProgressPhotos(artworkId) {
-        return this.getByIndex('progressPhotos', 'artworkId', artworkId);
+        const id = photoData.id || `photo_${Date.now()}`;
+        const data = { ...photoData, id, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+        await this.db.collection(`${this.getUserPath()}/progressPhotos`).doc(id).set(data);
+        return id;
     }
 
     async deleteProgressPhoto(id) {
-        return this.delete('progressPhotos', id);
+        await this.db.collection(`${this.getUserPath()}/progressPhotos`).doc(id).delete();
     }
 
-    // Assessments
-    async addAssessment(assessmentData) {
-        const id = 'assessment_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-        const data = {
-            id,
-            ...assessmentData,
-            assessedAt: new Date().toISOString()
-        };
-        await this.add('assessments', data);
-        return data;
+    // ==================== Assessments ====================
+    async getAssessments() {
+        const snapshot = await this.db.collection(`${this.getUserPath()}/assessments`).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
     async getAssessmentsByArtwork(artworkId) {
-        return this.getByIndex('assessments', 'artworkId', artworkId);
+        const snapshot = await this.db.collection(`${this.getUserPath()}/assessments`)
+            .where('artworkId', '==', artworkId).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
-    async updateAssessment(id, updates) {
-        const existing = await this.get('assessments', id);
-        const updated = { ...existing, ...updates };
-        await this.put('assessments', updated);
-        return updated;
+    async addAssessment(assessmentData) {
+        const id = assessmentData.id || `assessment_${Date.now()}`;
+        const data = { ...assessmentData, id, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+        await this.db.collection(`${this.getUserPath()}/assessments`).doc(id).set(data);
+        return id;
     }
 
-    async deleteAssessment(id) {
-        return this.delete('assessments', id);
+    async updateAssessment(id, assessmentData) {
+        await this.db.collection(`${this.getUserPath()}/assessments`).doc(id).update(assessmentData);
     }
 
-    async getAssessments() {
-        return this.getAll('assessments');
-    }
-
-    // Semester Grades
-    async addSemesterGrade(gradeData) {
-        const id = 'grade_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-        const data = {
-            id,
-            ...gradeData,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-        await this.add('semesterGrades', data);
-        return data;
-    }
-
+    // ==================== Semester Grades ====================
     async getSemesterGrades() {
-        return this.getAll('semesterGrades');
+        const snapshot = await this.db.collection(`${this.getUserPath()}/semesterGrades`).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
     async getSemesterGradesByStudent(studentId) {
-        return this.getByIndex('semesterGrades', 'studentId', studentId);
+        const snapshot = await this.db.collection(`${this.getUserPath()}/semesterGrades`)
+            .where('studentId', '==', studentId).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
-    async getSemesterGradesBySemester(semester) {
-        return this.getByIndex('semesterGrades', 'semester', semester);
+    async addSemesterGrade(gradeData) {
+        const id = gradeData.id || `grade_${Date.now()}`;
+        const data = { ...gradeData, id, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+        await this.db.collection(`${this.getUserPath()}/semesterGrades`).doc(id).set(data);
+        return id;
     }
 
-    async updateSemesterGrade(id, updates) {
-        const existing = await this.get('semesterGrades', id);
-        const updated = {
-            ...existing,
-            ...updates,
-            updatedAt: new Date().toISOString()
-        };
-        await this.put('semesterGrades', updated);
-        return updated;
+    async updateSemesterGrade(id, gradeData) {
+        await this.db.collection(`${this.getUserPath()}/semesterGrades`).doc(id).update(gradeData);
     }
 
     async deleteSemesterGrade(id) {
-        return this.delete('semesterGrades', id);
+        await this.db.collection(`${this.getUserPath()}/semesterGrades`).doc(id).delete();
     }
 
-    async getOrCreateSemesterGrade(studentId, semester, year) {
-        const grades = await this.getSemesterGradesByStudent(studentId);
-        let grade = grades.find(g => g.semester === semester && g.year === year);
-
-        if (!grade) {
-            grade = await this.addSemesterGrade({
-                studentId,
-                semester,
-                year,
-                exam1: null,
-                oral1: null,
-                exam2: null,
-                oral2: null,
-                selectedArtworks1: [],
-                selectedArtworks2: []
-            });
-        }
-
-        return grade;
-    }
-
-    // Schools
-    async addSchool(schoolData) {
-        const id = 'school_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-        const data = {
-            id,
-            ...schoolData,
-            createdAt: new Date().toISOString()
-        };
-        await this.add('schools', data);
-        return data;
-    }
-
+    // ==================== Schools ====================
     async getSchools() {
-        return this.getAll('schools');
+        const snapshot = await this.db.collection(`${this.getUserPath()}/schools`).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
-    async updateSchool(id, updates) {
-        const existing = await this.get('schools', id);
-        const updated = { ...existing, ...updates };
-        await this.put('schools', updated);
-        return updated;
+    async addSchool(schoolData) {
+        const id = schoolData.id || `school_${Date.now()}`;
+        const data = { ...schoolData, id, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+        await this.db.collection(`${this.getUserPath()}/schools`).doc(id).set(data);
+        return id;
+    }
+
+    async updateSchool(id, schoolData) {
+        await this.db.collection(`${this.getUserPath()}/schools`).doc(id).update(schoolData);
     }
 
     async deleteSchool(id) {
-        return this.delete('schools', id);
+        await this.db.collection(`${this.getUserPath()}/schools`).doc(id).delete();
     }
 
-    // Academic Years
-    async addAcademicYear(yearData) {
-        const id = 'year_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-        const data = {
-            id,
-            ...yearData,
-            createdAt: new Date().toISOString()
-        };
-        await this.add('academicYears', data);
-        return data;
-    }
-
+    // ==================== Academic Years ====================
     async getAcademicYears() {
-        return this.getAll('academicYears');
+        const snapshot = await this.db.collection(`${this.getUserPath()}/academicYears`).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
     async getAcademicYearsBySchool(schoolId) {
-        return this.getByIndex('academicYears', 'schoolId', schoolId);
+        const snapshot = await this.db.collection(`${this.getUserPath()}/academicYears`)
+            .where('schoolId', '==', schoolId).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
-    async updateAcademicYear(id, updates) {
-        const existing = await this.get('academicYears', id);
-        const updated = { ...existing, ...updates };
-        await this.put('academicYears', updated);
-        return updated;
+    async addAcademicYear(yearData) {
+        const id = yearData.id || `year_${Date.now()}`;
+        const data = { ...yearData, id, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+        await this.db.collection(`${this.getUserPath()}/academicYears`).doc(id).set(data);
+        return id;
+    }
+
+    async updateAcademicYear(id, yearData) {
+        await this.db.collection(`${this.getUserPath()}/academicYears`).doc(id).update(yearData);
     }
 
     async deleteAcademicYear(id) {
-        return this.delete('academicYears', id);
+        await this.db.collection(`${this.getUserPath()}/academicYears`).doc(id).delete();
+    }
+
+    // ==================== Bulk Operations ====================
+    async addStudentsBulk(students) {
+        const batch = this.db.batch();
+        const results = [];
+
+        for (const student of students) {
+            const id = student.id || `student_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const data = { ...student, id, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+            const ref = this.db.collection(`${this.getUserPath()}/students`).doc(id);
+            batch.set(ref, data);
+            results.push(id);
+        }
+
+        await batch.commit();
+        return results;
+    }
+
+    // Check for duplicate student
+    async checkDuplicateStudent(classId, studentNo) {
+        const snapshot = await this.db.collection(`${this.getUserPath()}/students`)
+            .where('classId', '==', classId)
+            .where('studentNo', '==', studentNo)
+            .get();
+        return !snapshot.empty;
     }
 }
 
-// Create and export singleton instance
-const db = new Database();
+// Create global instance
+const db = new FirestoreDB();
 export default db;
