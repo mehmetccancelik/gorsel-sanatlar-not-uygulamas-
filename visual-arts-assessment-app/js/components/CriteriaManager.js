@@ -117,9 +117,10 @@ class CriteriaManager {
             this.showTemplateForm();
         });
 
-        document.getElementById('saveTemplateBtn').addEventListener('click', () => {
+        // Use onclick instead of addEventListener to prevent duplicate handlers
+        document.getElementById('saveTemplateBtn').onclick = () => {
             this.saveTemplate();
-        });
+        };
 
         document.getElementById('cancelTemplateBtn').addEventListener('click', () => {
             this.hideForm();

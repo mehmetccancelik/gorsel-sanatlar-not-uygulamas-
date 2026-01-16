@@ -3,6 +3,7 @@ import db from '../database.js';
 import Camera from '../utils/camera.js';
 import Storage from '../utils/storage.js';
 import ScoreCalculator from '../utils/calculator.js';
+import GoogleSheetsManager from '../utils/googleSheets.js';
 import App from '../app.js';
 
 class ArtworkAssessment {
@@ -13,6 +14,7 @@ class ArtworkAssessment {
         this.artworks = [];
         this.currentArtwork = null;
         this.camera = new Camera();
+        this.googleSheets = new GoogleSheetsManager();
     }
 
     async render() {
@@ -60,6 +62,12 @@ class ArtworkAssessment {
         // Restore previous selections from localStorage
         const savedClassId = App.loadState('assessment_classId');
         const savedStudentId = App.loadState('assessment_studentId');
+        const savedArtworkId = App.loadState('assessment_artworkId');
+
+        // Clear the artworkId state after reading (one-time navigation)
+        if (savedArtworkId) {
+            localStorage.removeItem('app_state_assessment_artworkId');
+        }
 
         if (savedClassId && this.classes.find(c => c.id === savedClassId)) {
             classSelect.value = savedClassId;
@@ -67,11 +75,18 @@ class ArtworkAssessment {
 
             // Restore student selection after a short delay
             if (savedStudentId) {
-                setTimeout(() => {
+                setTimeout(async () => {
                     const studentSelect = document.getElementById('selectStudent');
                     if (studentSelect && this.students.find(s => s.id === savedStudentId)) {
                         studentSelect.value = savedStudentId;
                         studentSelect.dispatchEvent(new Event('change'));
+
+                        // If there's a saved artworkId, open it directly
+                        if (savedArtworkId && this.artworks.find(a => a.id === savedArtworkId)) {
+                            setTimeout(() => {
+                                this.showAssessmentArea(savedArtworkId);
+                            }, 200);
+                        }
                     }
                 }, 100);
             }
@@ -311,7 +326,7 @@ class ArtworkAssessment {
                 <h4 style="margin-top: 2rem;">Fotoğraf Geçmişi</h4>
                 <div class="photo-gallery">
                     ${photos.map(photo => `
-                        <div class="photo-item">
+                        <div class="photo-item" data-photo-url="${photo.photoUrl}" data-photo-date="${new Date(photo.capturedAt).toLocaleDateString('tr-TR')}">
                             <img src="${photo.photoUrl}" alt="Progress photo">
                             <div class="photo-item-date">${new Date(photo.capturedAt).toLocaleDateString('tr-TR')}</div>
                         </div>
@@ -331,6 +346,7 @@ class ArtworkAssessment {
         `;
 
         this.attachAssessmentEventListeners();
+        this.attachPhotoClickListeners();
     }
 
     renderScoringForm(template, existingAssessments) {
@@ -499,6 +515,9 @@ class ArtworkAssessment {
 
             this.showToast('Değerlendirme kaydedildi! Toplam: ' + totalScore.toFixed(1), 'success');
 
+            // Export to Google Sheets if enabled
+            await this.exportToGoogleSheets(totalScore, assessments);
+
             // Refresh the assessment area to show updated scores
             await this.showAssessmentArea(this.currentArtwork.id);
         } catch (error) {
@@ -507,8 +526,78 @@ class ArtworkAssessment {
         }
     }
 
+    async exportToGoogleSheets(totalScore, assessments) {
+        try {
+            // Get student and class info
+            const student = this.students.find(s => s.id === this.currentArtwork.studentId);
+            const studentClass = this.classes.find(c => c.id === student?.classId);
+
+            const rowData = this.googleSheets.formatAssessmentRow({
+                date: new Date().toLocaleDateString('tr-TR'),
+                className: studentClass?.name || '',
+                studentName: student?.name || '',
+                studentNumber: student?.studentNumber || '',
+                artworkTitle: this.currentArtwork.title,
+                totalScore: totalScore,
+                criteriaScores: assessments.map(a => a.score)
+            });
+
+            const result = await this.googleSheets.appendRow(rowData);
+
+            if (result.success) {
+                console.log('Assessment exported to Google Sheets');
+            } else if (result.reason !== 'not_configured') {
+                console.warn('Google Sheets export failed:', result.message);
+            }
+        } catch (error) {
+            console.error('Error exporting to Google Sheets:', error);
+            // Don't show error to user - this is a background operation
+        }
+    }
+
     showToast(message, type) {
         window.app.showToast(message, type);
+    }
+
+    attachPhotoClickListeners() {
+        document.querySelectorAll('.photo-item[data-photo-url]').forEach(item => {
+            item.addEventListener('click', () => {
+                const photoUrl = item.getAttribute('data-photo-url');
+                const photoDate = item.getAttribute('data-photo-date');
+                this.showPhotoLightbox(photoUrl, photoDate);
+            });
+        });
+    }
+
+    showPhotoLightbox(photoUrl, photoDate) {
+        // Create lightbox overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'lightbox-overlay';
+        overlay.innerHTML = `
+            <div class="lightbox-content">
+                <button class="lightbox-close">✕</button>
+                <img src="${photoUrl}" alt="Photo" class="lightbox-image">
+                <div class="lightbox-date">${photoDate}</div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        // Close on overlay click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay || e.target.classList.contains('lightbox-close')) {
+                overlay.remove();
+            }
+        });
+
+        // Close on Escape key
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                overlay.remove();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
     }
 }
 

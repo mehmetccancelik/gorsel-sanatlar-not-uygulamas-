@@ -122,6 +122,17 @@ class ClassManager {
             return;
         }
 
+        // Check for duplicate class (same name and year)
+        const existingClass = this.classes.find(c => 
+            c.name.toLowerCase() === name.toLowerCase() && 
+            c.year === year
+        );
+
+        if (existingClass) {
+            this.showToast('Bu sınıf zaten mevcut!', 'warning');
+            return;
+        }
+
         await db.addClass({ name, year });
         await this.loadClasses();
         this.hideForm();

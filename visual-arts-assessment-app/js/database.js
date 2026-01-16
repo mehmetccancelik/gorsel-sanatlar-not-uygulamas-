@@ -4,7 +4,7 @@
 class Database {
     constructor() {
         this.dbName = 'VisualArtsDB';
-        this.version = 1;
+        this.version = 3; // Upgraded for schools, academicYears
         this.db = null;
     }
 
@@ -55,6 +55,24 @@ class Database {
                 if (!db.objectStoreNames.contains('assessments')) {
                     const assessmentStore = db.createObjectStore('assessments', { keyPath: 'id' });
                     assessmentStore.createIndex('artworkId', 'artworkId', { unique: false });
+                }
+
+                // Semester Grades store
+                if (!db.objectStoreNames.contains('semesterGrades')) {
+                    const gradeStore = db.createObjectStore('semesterGrades', { keyPath: 'id' });
+                    gradeStore.createIndex('studentId', 'studentId', { unique: false });
+                    gradeStore.createIndex('semester', 'semester', { unique: false });
+                }
+
+                // Schools store
+                if (!db.objectStoreNames.contains('schools')) {
+                    db.createObjectStore('schools', { keyPath: 'id' });
+                }
+
+                // Academic Years store
+                if (!db.objectStoreNames.contains('academicYears')) {
+                    const yearStore = db.createObjectStore('academicYears', { keyPath: 'id' });
+                    yearStore.createIndex('schoolId', 'schoolId', { unique: false });
                 }
             };
         });
@@ -301,6 +319,125 @@ class Database {
 
     async getAssessments() {
         return this.getAll('assessments');
+    }
+
+    // Semester Grades
+    async addSemesterGrade(gradeData) {
+        const id = 'grade_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+        const data = {
+            id,
+            ...gradeData,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        await this.add('semesterGrades', data);
+        return data;
+    }
+
+    async getSemesterGrades() {
+        return this.getAll('semesterGrades');
+    }
+
+    async getSemesterGradesByStudent(studentId) {
+        return this.getByIndex('semesterGrades', 'studentId', studentId);
+    }
+
+    async getSemesterGradesBySemester(semester) {
+        return this.getByIndex('semesterGrades', 'semester', semester);
+    }
+
+    async updateSemesterGrade(id, updates) {
+        const existing = await this.get('semesterGrades', id);
+        const updated = {
+            ...existing,
+            ...updates,
+            updatedAt: new Date().toISOString()
+        };
+        await this.put('semesterGrades', updated);
+        return updated;
+    }
+
+    async deleteSemesterGrade(id) {
+        return this.delete('semesterGrades', id);
+    }
+
+    async getOrCreateSemesterGrade(studentId, semester, year) {
+        const grades = await this.getSemesterGradesByStudent(studentId);
+        let grade = grades.find(g => g.semester === semester && g.year === year);
+
+        if (!grade) {
+            grade = await this.addSemesterGrade({
+                studentId,
+                semester,
+                year,
+                exam1: null,
+                oral1: null,
+                exam2: null,
+                oral2: null,
+                selectedArtworks1: [],
+                selectedArtworks2: []
+            });
+        }
+
+        return grade;
+    }
+
+    // Schools
+    async addSchool(schoolData) {
+        const id = 'school_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+        const data = {
+            id,
+            ...schoolData,
+            createdAt: new Date().toISOString()
+        };
+        await this.add('schools', data);
+        return data;
+    }
+
+    async getSchools() {
+        return this.getAll('schools');
+    }
+
+    async updateSchool(id, updates) {
+        const existing = await this.get('schools', id);
+        const updated = { ...existing, ...updates };
+        await this.put('schools', updated);
+        return updated;
+    }
+
+    async deleteSchool(id) {
+        return this.delete('schools', id);
+    }
+
+    // Academic Years
+    async addAcademicYear(yearData) {
+        const id = 'year_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+        const data = {
+            id,
+            ...yearData,
+            createdAt: new Date().toISOString()
+        };
+        await this.add('academicYears', data);
+        return data;
+    }
+
+    async getAcademicYears() {
+        return this.getAll('academicYears');
+    }
+
+    async getAcademicYearsBySchool(schoolId) {
+        return this.getByIndex('academicYears', 'schoolId', schoolId);
+    }
+
+    async updateAcademicYear(id, updates) {
+        const existing = await this.get('academicYears', id);
+        const updated = { ...existing, ...updates };
+        await this.put('academicYears', updated);
+        return updated;
+    }
+
+    async deleteAcademicYear(id) {
+        return this.delete('academicYears', id);
     }
 }
 

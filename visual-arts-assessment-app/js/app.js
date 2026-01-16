@@ -1,10 +1,24 @@
 // Main Application Entry Point
 import db from './database.js';
+import SecurityManager from './components/SecurityManager.js';
 
 class App {
     constructor() {
         this.currentRoute = 'classes';
-        this.init();
+        this.security = new SecurityManager();
+        this.checkAuthAndInit();
+    }
+
+    async checkAuthAndInit() {
+        // Check if user is authenticated
+        if (!this.security.isAuthenticated()) {
+            this.security.renderLoginScreen(() => {
+                this.init();
+            });
+            return;
+        }
+
+        await this.init();
     }
 
     async init() {
@@ -37,7 +51,7 @@ class App {
         });
 
         // Load initial route from URL hash or default
-        const initialRoute = window.location.hash.slice(1) || 'classes';
+        const initialRoute = window.location.hash.slice(1) || 'main';
         this.navigate(initialRoute);
     }
 
@@ -89,6 +103,9 @@ class App {
 
         try {
             switch (route) {
+                case 'main':
+                    await this.loadMainFlow();
+                    break;
                 case 'classes':
                     await this.loadClassesView();
                     break;
@@ -101,8 +118,17 @@ class App {
                 case 'assessment':
                     await this.loadAssessmentView();
                     break;
+                case 'grades':
+                    await this.loadGradesView();
+                    break;
                 case 'reports':
                     await this.loadReportsView();
+                    break;
+                case 'semester-report':
+                    await this.loadSemesterReportView();
+                    break;
+                case 'settings':
+                    await this.loadSettingsView();
                     break;
                 default:
                     mainContent.innerHTML = '<h2>Sayfa bulunamadı</h2>';
@@ -172,6 +198,30 @@ class App {
         const { default: ReportsManager } = await import('./components/ReportsManager.js');
         const manager = new ReportsManager();
         await manager.render();
+    }
+
+    async loadSettingsView() {
+        const { default: SettingsManager } = await import('./components/SettingsManager.js');
+        const manager = new SettingsManager();
+        await manager.render();
+    }
+
+    async loadGradesView() {
+        const { default: GradeManager } = await import('./components/GradeManager.js');
+        const manager = new GradeManager();
+        await manager.render();
+    }
+
+    async loadSemesterReportView() {
+        const { default: SemesterReportManager } = await import('./components/SemesterReportManager.js');
+        const manager = new SemesterReportManager();
+        await manager.render();
+    }
+
+    async loadMainFlow() {
+        const { default: MainFlow } = await import('./components/MainFlow.js');
+        const mainFlow = new MainFlow();
+        await mainFlow.render();
     }
 
     showLoading(show) {
