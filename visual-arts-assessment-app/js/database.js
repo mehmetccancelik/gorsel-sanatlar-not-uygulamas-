@@ -149,6 +149,17 @@ class FirestoreDB {
         await this.db.collection(`${this.getUserPath()}/artworks`).doc(id).delete();
     }
 
+    async getArtworkById(id) {
+        const doc = await this.db.collection(`${this.getUserPath()}/artworks`).doc(id).get();
+        return doc.exists ? { id: doc.id, ...doc.data() } : null;
+    }
+
+    // Generic get method for any collection
+    async get(collection, id) {
+        const doc = await this.db.collection(`${this.getUserPath()}/${collection}`).doc(id).get();
+        return doc.exists ? { id: doc.id, ...doc.data() } : null;
+    }
+
     // ==================== Progress Photos ====================
     async getProgressPhotos() {
         const snapshot = await this.db.collection(`${this.getUserPath()}/progressPhotos`).get();

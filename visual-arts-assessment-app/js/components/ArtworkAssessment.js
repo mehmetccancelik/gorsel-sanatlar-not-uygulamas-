@@ -142,17 +142,26 @@ class ArtworkAssessment {
             <h3>Çalışmalar</h3>
             <button class="btn btn-primary" id="newArtworkBtn">+ Yeni Çalışma</button>
             <div class="grid grid-2" style="margin-top: 1rem;">
-                ${artworks.map(artwork => `
+                ${artworks.map(artwork => {
+            // Handle Firestore timestamp
+            let dateStr = '-';
+            if (artwork.createdAt) {
+                const date = artwork.createdAt.toDate ? artwork.createdAt.toDate() : new Date(artwork.createdAt);
+                dateStr = date.toLocaleDateString('tr-TR');
+            }
+            const score = artwork.totalScore !== undefined ? artwork.totalScore : 0;
+            return `
                     <div class="card">
                         <h4>${artwork.title}</h4>
-                        <p class="text-light">${new Date(artwork.createdAt).toLocaleDateString('tr-TR')}</p>
+                        <p class="text-light">${dateStr}</p>
                         <div class="score-display">
-                            <div class="score-value">${artwork.totalScore}</div>
+                            <div class="score-value">${score}</div>
                             <div class="score-label">/ 100</div>
                         </div>
                         <button class="btn btn-sm btn-primary" data-assess="${artwork.id}">Değerlendir</button>
                     </div>
-                `).join('')}
+                    `;
+        }).join('')}
             </div>
         `;
 
