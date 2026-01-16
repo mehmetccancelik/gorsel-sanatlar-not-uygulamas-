@@ -275,8 +275,8 @@ class CriteriaManager {
             return;
         }
 
-        if (this.editingCriteria.length < 3 || this.editingCriteria.length > 5) {
-            this.showToast('3-5 arası ölçüt tanımlamalısınız', 'warning');
+        if (this.editingCriteria.length < 1) {
+            this.showToast('En az 1 ölçüt tanımlamalısınız', 'warning');
             return;
         }
 
