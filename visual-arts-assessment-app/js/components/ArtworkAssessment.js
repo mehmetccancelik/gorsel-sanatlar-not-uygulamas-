@@ -421,12 +421,18 @@ class ArtworkAssessment {
                                     <span>${criterion.name}</span>
                                     <span class="text-light">Ağırlık: ${criterion.weight}%</span>
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.75rem;">
                                     <input type="range" min="1" max="10" value="${value}" 
                                         data-criterion-id="${criterion.id}" 
                                         data-weight="${criterion.weight}"
                                         class="form-range batch-slider" style="flex: 1;">
-                                    <span class="score-display-mini batch-score-${criterion.id}" style="min-width: 2rem; text-align: center; font-weight: bold;">${value}</span>
+                                    <div class="score-badge batch-score-${criterion.id}" 
+                                        style="min-width: 3rem; height: 3rem; display: flex; align-items: center; justify-content: center; 
+                                        font-size: 1.25rem; font-weight: bold; border-radius: 0.5rem; 
+                                        background: ${value >= 8 ? 'var(--success)' : value >= 5 ? 'var(--warning)' : 'var(--danger)'}; 
+                                        color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                        ${value}
+                                    </div>
                                 </div>
                             </div>
                         `;
@@ -446,11 +452,24 @@ class ArtworkAssessment {
         // Attach photo event listeners
         this.attachBatchPhotoListeners();
 
-        // Slider value display
+        // Slider value display with color update
         container.querySelectorAll('.batch-slider').forEach(slider => {
             slider.addEventListener('input', (e) => {
                 const criterionId = e.target.getAttribute('data-criterion-id');
-                document.querySelector(`.batch-score-${criterionId}`).textContent = e.target.value;
+                const value = parseInt(e.target.value);
+                const badge = document.querySelector(`.batch-score-${criterionId}`);
+
+                if (badge) {
+                    badge.textContent = value;
+                    // Update color based on value
+                    if (value >= 8) {
+                        badge.style.background = 'var(--success)';
+                    } else if (value >= 5) {
+                        badge.style.background = 'var(--warning)';
+                    } else {
+                        badge.style.background = 'var(--danger)';
+                    }
+                }
             });
         });
 
